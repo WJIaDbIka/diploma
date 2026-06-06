@@ -22,6 +22,7 @@ ESC = b'\x1b'
 GS  = b'\x1d'
 
 CMD_INIT          = ESC + b'@'
+CMD_CODEPAGE_866  = ESC + b't\x11'   # select CP866 (Cyrillic) on printer
 CMD_ALIGN_LEFT    = ESC + b'\x61\x00'
 CMD_ALIGN_CENTER  = ESC + b'\x61\x01'
 CMD_BOLD_ON       = ESC + b'\x45\x01'
@@ -31,6 +32,8 @@ CMD_SIZE_DOUBLE   = GS  + b'!\x11'   # double width + height
 CMD_SIZE_QUAD     = GS  + b'!\x33'   # 4× width + height
 CMD_CUT           = GS  + b'V\x00'
 CMD_FEED          = b'\n'
+
+SEP = b'-' * 32   # ASCII separator, safe for any code page
 
 # ── Settings persistence ───────────────────────────────────────────────────────
 SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings.json')
@@ -56,29 +59,29 @@ def list_printers() -> list[str]:
     return [p[2] for p in win32print.EnumPrinters(flags)]
 
 def encode_text(text: str) -> bytes:
-    """Encode Ukrainian / Latin text for a typical receipt printer (CP866)."""
     return text.encode('cp866', errors='replace')
 
 def build_receipt(order_number: int) -> bytes:
-    now       = datetime.now()
-    date_str  = now.strftime('%d.%m.%Y')
-    time_str  = now.strftime('%H:%M:%S')
-    separator = encode_text('─' * 32)
+    now      = datetime.now()
+    date_str = now.strftime('%d.%m.%Y')
+    time_str = now.strftime('%H:%M:%S')
 
     data  = CMD_INIT
+    data += CMD_CODEPAGE_866       # tell printer to use CP866 (Cyrillic)
     data += CMD_ALIGN_CENTER
     data += CMD_FEED
     data += CMD_BOLD_ON
     data += encode_text('ЗАМОВЛЕННЯ') + CMD_FEED
     data += CMD_BOLD_OFF
-    data += separator + CMD_FEED
+    data += SEP + CMD_FEED
     data += CMD_SIZE_QUAD
     data += CMD_BOLD_ON
     data += encode_text(str(order_number)) + CMD_FEED
     data += CMD_BOLD_OFF
     data += CMD_SIZE_NORMAL
-    data += separator + CMD_FEED
-    data += encode_text(f'{date_str}   {time_str}') + CMD_FEED
+    data += SEP + CMD_FEED
+    data += encode_text(date_str) + CMD_FEED   # date on its own line
+    data += encode_text(time_str) + CMD_FEED   # time on its own line
     data += CMD_FEED * 3
     data += CMD_CUT
     return data
